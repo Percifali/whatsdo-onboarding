@@ -9,19 +9,18 @@ export default async function handler(
     return res.status(500).json({ error: "BACKEND_URL not configured" });
   }
 
-  const { path } = req.query;
-  const targetPath = Array.isArray(path) ? path.join("/") : path || "";
-  const url = new URL(targetPath, backendUrl);
+  // Parse path from the URL directly — more reliable than req.query.path
+  const reqUrl = req.url || "";
+  const stripped = reqUrl.replace(/^\/api\//, "");
+  const [pathPart, queryPart] = stripped.split("?");
 
-  // Forward query string
-  const queryString = req.url?.split("?")[1];
-  if (queryString) {
-    url.search = queryString;
+  const target = `${backendUrl.replace(/\/$/, "")}/${pathPart}`;
+  const finalUrl = queryPart ? `${target}?${queryPart}` : target;
+
+  const headers: Record<string, string> = {};
+  if (req.headers["content-type"]) {
+    headers["Content-Type"] = req.headers["content-type"];
   }
-
-  const headers: Record<string, string> = {
-    "Content-Type": req.headers["content-type"] || "application/json",
-  };
 
   const fetchOptions: RequestInit = {
     method: req.method,
@@ -33,7 +32,7 @@ export default async function handler(
   }
 
   try {
-    const response = await fetch(url.toString(), fetchOptions);
+    const response = await fetch(finalUrl, fetchOptions);
     const contentType = response.headers.get("content-type") || "";
 
     res.status(response.status);
